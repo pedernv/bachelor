@@ -1,0 +1,285 @@
+% PREAMBLE
+\documentclass[a4paper, oneside, 12pt]{book} 
+\usepackage{amsmath,graphicx,listings,parskip,cite,float}
+\graphicspath{{./figures/}}
+
+\author{Peder Nørving Viken} %author
+\title{Spectral function reconstruction} %title
+
+% START OF DOCUMENT
+\begin{document}
+\maketitle
+
+\tableofcontents
+
+
+\chapter{Bayesian reconstruction}
+\section{Brief intro to Bayesian inference}
+
+There are to main approaches to statistics. First the classical statistics that in broad terms look at the number of beneficial outcomes compared to the total number of possible outcomes. 
+
+The other is called Bayesian statistics, named after Thomas Bayes, and has as a main tool Bayes Theorem. The Bayesian approach to statistics uses Bayes theorem to base the inference on the events that actually happened, not the total number of events as in the frequentist approach.
+
+In it's simplest form Bayes theorem can be written as 
+\begin{equation}
+\label{eq:BayesTheorem}
+P(A|B)=\frac{P(B|A)\cdot P(A)}{P(B)}
+\end{equation}
+
+expressing the posterior probability of event A given that event B as occurred. Here the probability $P(B)$ is a normalization constant and independent of A, so equation $\ref{eq:BayesTheorem}$ can be written as
+
+\begin{equation}
+P(A|B) \propto P(B|A)P(A)
+\end{equation}
+
+Where $P(B|A)$ is the likelihood and $P(A)$ is the prior.
+\section{Bayesian approach to inverse problems}
+
+\subsection{Motivation}
+The inverse problem in science is given a set of data, which sets of parameters can give this result. Such problems include determining the electric field from measurements of how an electron moves though it, or problems in heat conduction. Conversely to the forward problem which gathers data based on parameters, the inverse problem seeks to determine the parameters based on the data itself.
+
+Consider the inverse problem
+
+\begin{equation}
+D(\mu) = \int K(\mu,\omega)\rho(\omega)d\omega
+\end{equation}
+
+Here  $\rho(\omega)$ is the unknown function that is to be found, while $D(\mu)$ is known from for example experiments.
+When solving these problems in practice $D(\mu)$ is know at $N_{\mu}$ discrete points such that $D(\mu) \rightarrow D_{\mu}$. This leads to the inverse problem being rewritten as
+
+\begin{equation}
+D_{\mu} = K\cdot\rho_{\omega}
+\end{equation}
+
+where $\rho_{\omega}$ is the discretized solution evaluated at $N_{\omega}$ points and $K$ is a $N_{\mu} \times N_{\omega}$ matrix kernel. If $N_{\mu} = N_{\omega}$ the problem would be trivial, as it would just be solving $N_{\mu}$ equations of $N_{\mu}$ variables, which can be done with simple methods from linear algebra like Gauss elimination or Cramer's rule. And if $N_{\mu} > N_{\omega}$ there may be no solutions, while if $N_{\mu} < N_{\omega}$ there can be an infinite number of solutions.
+
+In most cases when solving this type of problem in practise $N_{\mu} \ll N_{\omega}$, due to number of available data points being much lower than the required resolution of the solution, leading to the problem being ill posed.
+
+\subsection{How BR works}
+In the Bayesian approach the goal is to find the most probable solution to the problem using a priori information and measured data, leading to a MAP estimate for the parameters of the solution. Here the parameters of the solution are the values of the solution function at the $N_{\omega}$ points. This is done by expressing the conditional probability of a solution given the data and prior information as a product of a likelihood and a prior. Using bayes theorem this can be written as
+
+\begin{equation}
+\label{eq:br}
+P(\rho|D,I) \propto P(D|\rho)P(\rho|I)
+\end{equation}
+
+Here $\rho$ is the unknown solution to the inverse problem, while D is the data and I is the prior information. To then find the most probable solution one has to maximize the posterior distribution in terms of $\rho$, which is equivalent to maximizing equation $\ref{eq:br}$ then in terms of $\rho$. Note that equation $\ref{eq:br}$ is not normalized, this can be done since the normalization term is independent of $\rho$, so when maximizing this will have no effect on the location of the maximum
+
+
+\subsection{The posterior distribution}
+As seen in equation $\ref{eq:br}$ the posterior distribution that is to be maximized is proportional to the product of a likelihood and a prior, so maximizing the posterior will clearly be equivalent to maximizing this product.
+
+The likelihood term $P(D|\rho)$ can be seen as a measure of how likely it is that the data is correct for any given solution. This can be expressed using a regular $\chi^{2}$ fit of the data, but due to the problem being ill-posed, using a MLE approach and simply maximizing the likelihood, can lead to non-physical solutions or wildly oscillatory solutions.
+
+This is where the prior comes in to play, as it can be used "constrain" the likelihood. The prior distribution $P(\rho|I)$ tells how probable $\rho$ is give the prior information, and can often come from what is know about the process that gave the measured data. If for example, due to the basis for the problem, the solution $\rho$ is only defined for positive numbers, it makes sense to use a prior defined on $(0,\infty)$. Or if the solution is related to an angle, a prior defined on $[0,2\pi)$ would be reasonable.
+
+
+\section{Worked example}
+
+To see how this method works consider a simple Breit-Wigner function, and a kernel on the form
+
+\begin{equation}
+K=\int \frac{2\omega}{\omega^{2}+\mu^{2}}d\omega
+\end{equation} 
+
+Then we used these to create 30 test data points. To emulate this being experimental data, we also added gaussian noise on top, so that each data point has a normal distribution.
+
+\includegraphics[scale=0.5]{BreitWigner}
+
+We are now ready to reconstruct the data, to find the most probable solution $\rho$. For the likelihood it is natural to use a $\chi^{2}$ fit. Where $P(D|\rho) = e^{-L}$ where L is given by
+
+\begin{equation}
+L=\frac{1}{2} \sum_{i,j} (D_{i}-D_{i}^{\rho}) \cdot C_{i,j}^{-1} (D_{j}-D_{j}^{\rho})
+\end{equation}
+%reference form of L, see numerical recipes in C page 806%
+
+Where $D_{i}$ are our measurements, $D_{i}^{\rho}$ are the elements of the vector $K\cdot\rho$ and $C$ is the covariance matrix. This will be computationally heavy to compute, so by exploiting that C is symmetric and can be orthogonally diagonalized such that $C=RDR^{T}$ where D is the diagonal eigenvalue matrix and R is the orthogonal eigenvector matrices.
+Using this L can be rewritten as
+
+\begin{equation}
+L=\frac{1}{2} \sum_{i} (\tilde{D_{i}} - \tilde{D_{i}^{\rho}})^{2}/ \sigma_{i}^{2}
+\end{equation}
+
+where $\tilde{D_{i}}=R \cdot D_{i}$, and $\sigma_{i}$ is the i'th element of the diagonal matrix D. Here $e^{-L}$ will clearly have a normal distribution, and L can be used as a measure of how closely $\rho$ fits our measured data. This can be seen by $L \rightarrow 0$ as $\tilde{D_{i}^{\rho}} \rightarrow \tilde{D_{i}}$.
+
+A suitable choice for the prior is $e^{S}$ where
+
+\begin{equation}
+S=\alpha\int 1-\frac{\rho(\omega)}{m(\omega)}+log(\frac{\rho(\omega)}{m(\omega)})d\omega
+\end{equation}
+
+\begin{equation}
+S \approx \alpha \sum_{i=1}\Delta\omega_{i}(1-\frac{\rho(\omega_{i})}{m(\omega_{i})}+log(\frac{\rho(\omega_{i})}{m(\omega_{i})}) 
+\end{equation}
+
+
+Here $m(\omega)$ is an educated guess, which corresponds to the exact solution in absence of data. So if $\rho(\omega_{i})=m(\omega_{i})$ $\forall\omega_{i}$,  then $S=0$. I.e. if we find a solution that perfectly fit our "guess", the cost function S will be 0. By keeping $m(\omega)$ constant no information about the shape of the spectral function is added. Further $\alpha$ is an adjustable parameter that weights the prior against the likelihood, so for small values of $\alpha$ the data becomes more important. Can be set equal to 1 so no assumption is made about this weight.
+
+%source: A novel Bayesian approach to spectral function reconstruction%
+
+Now looking at $e^{S}$ for a single $\omega_{i}$ letting $\rho(\omega_{i}) \rightarrow \rho_{i}$ and $m(\omega_{i}) \rightarrow m_{i}$
+
+\begin{equation} 
+exp[\Delta\omega_{i}(1-\frac{\rho_{i}}{m_{i}}+log(\frac{\rho_{i}}{m_{i}}))]
+\end{equation}
+
+After rewriting, it becomes
+
+\begin{equation}
+C \cdot (\frac{\rho_{i}}{m_{i}})^{\Delta\omega_{i}} \cdot exp(-\frac{\rho_{i}}{m_{i}}\cdot\Delta\omega_{i})
+\end{equation}
+
+Which is an non-normalized gamma probability density of $\rho_{i}$, with shape parameter $\alpha = \Delta\omega_{i}+1$ and scale parameter $\beta = \frac{\Delta\omega_{i}}{m_{i}}$. Since the gamma distribution is undefined for negative numbers, then it follows that it is impossible for the solution function that is returned to be smaller than zero.
+
+Now to find the most probable solution we need to maximize the posterior which is proportional to $e^{-L+S}$, this is equivalent to minimizing $L-S$.
+
+\begin{figure}[H]
+\includegraphics[scale=0.6]{wide.png}
+\caption{The reconstructed function compared with the original}
+\end{figure}
+
+\section{Challenges with bayesian approach}
+Using this bayesian approach leaves the user with some choices to make, especially when it comes to the prior which is often the case when it comes to bayesian methods. First of all why choose a gamma prior, there are several other probability distributions defined on the same interval. 
+
+Further choice of m and $\alpha$
+\chapter{Backus-Gilbert method}
+
+\section{Background and how it works}
+The Backus-Gilbert method is a method of regularization for inverse problems, regularization being the process of adding information in order to solve ill-posed problem and prevent overfitting.
+
+The Backus-Gilbert method aims to solve the equation
+
+\begin{equation}
+\label{eq:BG}
+D_{\mu}=\int K_{\mu}(\omega)\rho(\omega)d\omega+n_{\mu}
+\end{equation}
+
+where as before $D_{\mu}$ is data at known $N_{\mu}$ point, while $K_{\mu}(\omega)$ is the known relation to the unknown function $\rho(\omega)$ and $n_{\mu}$ is noise. Compared to the matrix notation used above $K_{\mu}$ is the $\mu$'th row of the matrix kernel. The Backus-Gilbert method solves the problem by looking for a solution $\hat{\rho}(\omega)$ with a relation close to the identity mapping to the true solution $\rho(\omega)$ in the limit $n_{\mu} \rightarrow 0$. This relation can be written as
+
+\begin{equation}
+\label{eq:BGmap}
+\hat{\rho}(\omega) = \int \hat{\delta}(\omega,\omega')\rho(\omega')d\omega'
+\end{equation}
+
+for a resolution kernel $\hat{\delta}(\omega,\omega')$, and it is the spread of this the Backus-Gilbert method seeks to minimize, alongside the variance of the solution $\hat{\rho}(\omega)$. In the ideal case the Backus-Gilbert method gives a resolution kernel with spread zero, leading to $\hat{\delta}(\omega,\omega')$ becoming a Dirac $\delta$, and the estimate is in fact the same as the true solution. 
+
+Mathematically the Backus-Gilbert method does this by minimizing the relation 
+
+\begin{equation}
+A + \lambda B
+\end{equation}
+
+where $B=\mathrm{Var}[\hat{\rho}(\omega)]$ and $A$ is a positive measure of the spread of the resolution kernel. The parameter $\lambda$ here plays a role of balancing $A$ and $B$.
+
+The Backus-Gilbert method looks for a estimator for the solution that is an linear combination of the data on the form
+
+\begin{equation}
+\label{eq:BGlin}
+\hat{\rho}(\omega) = \sum_{\mu}q_{\mu}(\omega)D_{\mu}
+\end{equation}
+
+Will also need the integrals of the response kernels
+\begin{equation}
+R_{\mu}=\int K_{\mu}(\omega)d\omega
+\end{equation}
+
+Substituting equation $\ref{eq:BGlin}$ into $\ref{eq:BG}$ and comparing this with $\ref{eq:BGmap}$ yields
+
+\begin{equation}
+\hat{\delta}(\omega,\omega')=\sum_{\mu}q_{\mu}(\omega)K_{\mu}(\omega')
+\end{equation}
+
+By requiring this kernel having unit area at every $\omega$ as a constraint to limit the solutions
+
+\begin{equation}
+\label{BGcons}
+1=\int \hat{\delta}(\omega,\omega')d\omega'=\sum_{\mu}q_{\mu}(\omega)\int K_{\mu}(\omega')d\omega' \equiv \textbf{q}(\omega)\cdot \textbf{R}
+\end{equation}
+
+Here $\textbf{q}(\omega)$ and $\textbf{R}$ can be seen as vectors of length $N_{\mu}$, the number of measurements. 
+
+By standard error propagation, the functional $B$ can be written as
+\begin{equation}
+B=\mathrm{Var}[\hat{\rho}(\omega)]=\sum_{i,j}q_{i}(\omega)S_{i,j}q_{j}(\omega)= \textbf{q}(\omega)\cdot \textbf{S} \cdot \textbf{q}(\omega)
+\end{equation}
+
+In the Backus-Gilbert method $A$ is defined as the second moment of its square, so the functional $A$ becomes
+
+\begin{equation}
+A \equiv \int (\omega'-\omega)^{2} [\hat{\delta}(\omega,\omega')]^{2}d\omega'=\sum_{i,j}q_{i}(\omega)W_{i,j}q_{j}(\omega) \equiv \textbf{q}(\omega)\cdot \textbf{W} \cdot \textbf{q}(\omega)
+\end{equation}
+
+where
+\begin{equation}
+W_{i,j}(\omega) \equiv \int (\omega'-\omega)^{2} K_{i}(\omega')K_{j}(\omega')d\omega'
+\end{equation}
+
+The functions $q_{\mu}(\omega)$ are then determined by minimizing
+
+\begin{equation}
+A+\lambda B = \textbf{q}(\omega)\cdot [\textbf{W}+\lambda\textbf{S}] \cdot \textbf{q}(\omega)
+\end{equation}
+
+under the constraint of equation $\ref{BGcons}$, that is $1=\textbf{q}(\omega)\cdot\textbf{R}$.
+
+The expression can be minimized using Lagrange multipliers. By letting $\textbf{M}=\textbf{W}+\lambda \textbf{S}$. Giving the Lagrange function
+
+\begin{equation}
+\mathcal{L} = \textbf{qMq}+\lambda (\textbf{qR}-1)
+\end{equation}
+
+When taking the derivative in terms of $q_{k}$
+\begin{equation}
+\frac{d \mathcal{L}}{d q_{k}} = \textbf{Mq}+ \textbf{qM}+ \lambda \textbf{R}=0
+\end{equation}
+
+Since $M$ is a symmetric matrix this is equivalent to
+
+\begin{equation}
+\textbf{Mq}=-\frac{\lambda}{2}\textbf{R}
+\end{equation}
+
+If $M$ can be inverted (add proof) this is equivalent to
+
+\begin{equation}
+\textbf{q}=-\frac{\lambda}{2}\textbf{M}^{-1}\textbf{R}
+\end{equation}
+
+By the constraint $\ref{BGcons}$
+\begin{equation*}
+1=\textbf{Rq}=-\frac{\lambda}{2}\textbf{R}\textbf{M}^{-1}\textbf{R}
+\iff
+\lambda = -2(\textbf{R}\textbf{M}^{-1}\textbf{R})^{-1}
+\implies \textbf{q}=\frac{(\textbf{W}+\lambda \textbf{S})^{-1}\textbf{R}}{\textbf{R}(\textbf{W}+\lambda \textbf{S})^{-1}\textbf{R}}
+\end{equation*}
+
+Add proof/argument that this is the minimum
+
+\chapter{worked example}
+
+\chapter{Comparison}
+
+
+\chapter{Conclusion}
+
+
+\chapter{to find out}
+
+Further things to add:
+\begin{itemize}  
+\item What type of distribution does the posterior have? Note, the likelihood has a normal distribution
+\item Relation/comparision to MEM
+\item why minimize not maximize? convention
+\item full derivation of kernel
+\item arguments for choice of prior.
+\item argument for sampling rate in general $N_{\omega}$
+\item formal definition of ill posed problem (Hadamard definition)
+
+\end{itemize}
+
+\chapter{References}
+Press, W. (2002). Numerical recipes in C : The art of scientific computing (2nd ed.). Cambridge: Cambridge University Press.
+
+Bolstad, W. (2007). Introduction to Bayesian statistics (2nd ed.). Hoboken, N.J: Wiley-Interscience.
+\end{document}
+% END OF DOCUMENT
